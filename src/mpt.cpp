@@ -40,7 +40,7 @@ std::optional<Bytes> MptTrie::get(const Bytes& key) const {
     return node->value;
 }
 
-rlp::Bytes MptTrie::encodeNodeValue(const NodePtr& node) {
+Bytes MptTrie::encodeNodeValue(const NodePtr& node) {
     if (!node->value) {
         // empty => RLP empty string
         return rlp::encodeBytes({});
@@ -48,8 +48,8 @@ rlp::Bytes MptTrie::encodeNodeValue(const NodePtr& node) {
     return rlp::encodeBytes(*node->value);
 }
 
-rlp::Bytes MptTrie::encodeNode(const NodePtr& node) {
-    std::vector<rlp::Bytes> fields;
+Bytes MptTrie::encodeNode(const NodePtr& node) {
+    std::vector<Bytes> fields;
     fields.reserve(17);
 
     // 16 children as hashes/embedded
@@ -58,7 +58,7 @@ rlp::Bytes MptTrie::encodeNode(const NodePtr& node) {
             fields.push_back(rlp::encodeBytes({}));  // empty
         } else {
             // For simplicity, always embed full child RLP (no hash-shortcut)
-            rlp::Bytes enc = encodeNode(child);
+            Bytes enc = encodeNode(child);
             fields.push_back(rlp::encodeBytes(enc));
         }
     }
@@ -69,9 +69,9 @@ rlp::Bytes MptTrie::encodeNode(const NodePtr& node) {
 }
 
 std::string MptTrie::rootHash() const {
-    rlp::Bytes enc = encodeNode(root_);
+    Bytes enc = encodeNode(root_);
     Bytes h = keccak256(enc);
-    return "0x" + toHex(h);
+    return "0x" + gambit::toHex(h);
 }
 
 } // namespace gambit

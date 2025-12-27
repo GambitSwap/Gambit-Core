@@ -24,13 +24,8 @@ Bytes encodeList(const std::vector<Bytes>& items);
 // Utility: concatenate many byte arrays
 Bytes concat(const std::vector<Bytes>& parts);
 
-} // namespace rlp
-} // namespace gambit
-
-namespace rlp {
-
 struct Decoded {
-    bool isList;
+    bool isList{false};
     Bytes bytes;
     std::vector<Decoded> list;
 };
@@ -42,3 +37,4 @@ Decoded decode(const Bytes& in, size_t& offset);
 Decoded decode(const Bytes& in);
 
 } // namespace rlp
+} // namespace gambit

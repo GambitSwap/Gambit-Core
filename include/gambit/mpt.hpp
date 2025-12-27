@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <vector>
+#include <array>
 #include <string>
 #include <cstdint>
 #include <optional>
@@ -36,8 +37,8 @@ private:
     NodePtr root_;
 
     static std::vector<uint8_t> toNibbles(const Bytes& key);
-    static rlp::Bytes encodeNode(const NodePtr& node);
-    static rlp::Bytes encodeNodeValue(const NodePtr& node);
+    static Bytes encodeNode(const NodePtr& node);
+    static Bytes encodeNodeValue(const NodePtr& node);
 };
 
 } // namespace gambit

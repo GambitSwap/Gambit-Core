@@ -50,6 +50,9 @@ public:
 
     // Deserialize from hex (optional)
     static Transaction fromHex(const std::string& hex);
+
+    // Compute transaction hash
+    std::string computeHash() const;
 };
 
 } // namespace gambit

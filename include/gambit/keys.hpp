@@ -11,6 +11,13 @@ typedef secp256k1_context_struct secp256k1_context;
 namespace gambit
 {
 
+    struct Signature
+    {
+        std::vector<std::uint8_t> r; // 32 bytes
+        std::vector<std::uint8_t> s; // 32 bytes
+        std::uint8_t v{0};           // recovery id (0 or 1)
+    };
+
     class Keys
     {
     public:
@@ -18,13 +25,6 @@ namespace gambit
         static Address recoverAddress(const Bytes32 &msgHash,
                                       const Signature &sig,
                                       std::uint64_t chainId);
-    };
-
-    struct Signature
-    {
-        std::vector<std::uint8_t> r; // 32 bytes
-        std::vector<std::uint8_t> s; // 32 bytes
-        std::uint8_t v;              // recovery id (0 or 1)
     };
 
     class KeyPair

@@ -45,11 +45,11 @@ std::string State::root() const {
         Bytes key = fromHex(addrHex);
 
         // Value = RLP[ balance, nonce ]
-        std::vector<rlp::Bytes> fields;
+        std::vector<Bytes> fields;
         fields.push_back(rlp::encodeUint(acc.balance));
         fields.push_back(rlp::encodeUint(acc.nonce));
 
-        rlp::Bytes value = rlp::encodeList(fields);
+        Bytes value = rlp::encodeList(fields);
 
         trie.put(key, value);
     }

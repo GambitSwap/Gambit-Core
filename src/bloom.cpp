@@ -20,7 +20,7 @@ void Bloom::add(const std::string& hex) {
 }
 
 std::string Bloom::toHex() const {
-    return "0x" + gambit::toHex(bits);
+    return "0x" + gambit::toHex(Bytes(bits.begin(), bits.end()));
 }
 
 } // namespace gambit

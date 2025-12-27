@@ -37,6 +37,7 @@ add_library(gambit_core
     src/mpt.cpp
     src/receipt.cpp
     src/bloom.cpp
+    external/tiny-keccak/keccak.cpp
 )
 
 target_link_libraries(gambit_core

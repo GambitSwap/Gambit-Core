@@ -21,7 +21,7 @@ Address Address::fromBytes(const std::vector<std::uint8_t>& bytes) {
 }
 
 Address Address::fromHex(const std::string& hex) {
-    auto raw = fromHex(hex);
+    auto raw = gambit::fromHex(hex);
     return fromBytes(raw);
 }
 
@@ -60,7 +60,7 @@ std::string Address::toChecksumHex(const std::array<std::uint8_t, kSize>& raw) {
 
     // Compute keccak256 of lowercase hex string
     auto hash = keccak256(hex);
-    std::string hashHex = toHex(hash);
+    std::string hashHex = gambit::toHex(hash);
 
     // Apply EIP-55 checksum
     std::string out = "0x";
@@ -86,9 +86,16 @@ std::string Address::toChecksumHex(const std::array<std::uint8_t, kSize>& raw) {
 
 std::string Address::toHex(bool checksum) const {
     if (!checksum) {
-        return "0x" + gambit::toHex(bytes_);
+        return "0x" + gambit::toHex(Bytes(bytes_.begin(), bytes_.end()));
     }
     return toChecksumHex(bytes_);
+}
+
+bool Address::isZero() const {
+    for (auto b : bytes_) {
+        if (b != 0) return false;
+    }
+    return true;
 }
 
 bool Address::operator==(const Address& other) const {

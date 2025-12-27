@@ -6,6 +6,8 @@
 #include "gambit/transaction.hpp"
 #include "gambit/zk.hpp"
 #include "gambit/hash.hpp"
+#include "gambit/receipt.hpp"
+#include "gambit/bloom.hpp"
 
 namespace gambit {
 

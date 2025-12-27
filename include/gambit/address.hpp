@@ -20,6 +20,7 @@ public:
     std::string toHex(bool checksum = true) const;
     const std::array<std::uint8_t, kSize>& bytes() const { return bytes_; }
 
+    bool isZero() const;
     bool operator==(const Address& other) const;
     bool operator!=(const Address& other) const;
 

@@ -1,5 +1,6 @@
 #include "gambit/p2p_node.hpp"
 #include "gambit/hash.hpp"
+#include "gambit/dns_seed.hpp"
 
 #ifdef _WIN32
     #include <winsock2.h>
@@ -18,10 +19,73 @@
 
 namespace gambit {
 
+    void P2PNode::bootstrapWithSeeder() {
+        // Assume you have:
+        // - keyPair_ : this node's KeyPair
+        // - config_.publicIp, config_.listenPort
+        // - chain_.chainId()
+    
+        PeerInfo me;
+        me.nodeId = Address(); // will be filled by buildSeederProof
+        me.ip     = config_.publicIp;
+        me.port   = config_.listenPort;
+        me.lastSeen = 0;
+        me.score    = 0;
+    
+        Bytes proof = ZkSeederClient::buildSeederProof(keyPair_, me, chain_.chainId());
+    
+        // Now call the RPC to a seeder node:
+        //
+        // method: "seeder_register"
+        // params: {
+        //   "ip":     me.ip,
+        //   "port":   me.port,
+        //   "nodeId": me.nodeId.toHex(),
+        //   "proof":  "0x" + toHex(proof)
+        // }
+    }
+    
+
 P2PNode::P2PNode(Blockchain& chain, std::uint16_t listenPort)
     : chain_(chain), listenPort_(listenPort) {}
 
 void P2PNode::start() {
+    // Setup the DNSSeedManager
+    DNSSeedManager dns;
+
+    // ToDo: Limit the ips to no more than 20 peers
+    auto seedIPs = dns.resolveAll();
+    // ToDo: Check the peer capacity; and join lowest cap first.
+    for (const auto& ip : seedIPs) {
+        std::cout << "[DNS] Found peer: " << ip << "\n";
+        connectTo(ip, defaultPort);
+    }
+
+    // 1. Discover seeder nodes (hardcoded, config, on-chain)
+    std::vector<PeerEndpoint> seederEndpoints = config_.seeders; // IP/port list
+
+    // 2. Register this node with each seeder
+    for (const auto& ep : seederEndpoints) {
+        // Build proof locally
+        PeerInfo me;
+        me.nodeId = myNodeId();
+        me.ip     = config_.publicIp;   // or learned externally
+        me.port   = config_.listenPort;
+        me.lastSeen = 0; // seeder will overwrite with its own now()
+
+        Bytes proof = buildSeederProof(me); // same format verifyProof expects
+
+        // Call RPC: seeder_register
+        // ...
+    }
+
+    // 3. Query peers
+    for (const auto& ep : seederEndpoints) {
+        // RPC: seeder_getPeers(limit)
+        // For each returned peer, connectToPeer(peer.ip, peer.port)
+    }
+
+
     running_ = true;
 
 #ifdef _WIN32

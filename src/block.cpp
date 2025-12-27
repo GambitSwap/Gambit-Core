@@ -34,12 +34,12 @@ std::string Block::computeHash() const {
         proof.commitment + "|" +
         std::to_string(timestamp);
 
-    return toHex(keccak256(concat));
+    return gambit::toHex(keccak256(concat));
 }
 
 std::string Block::toHex() const {
     Bytes enc = rlpEncode();
-    return "0x" + toHex(enc);
+    return "0x" + gambit::toHex(enc);
 }
 
 Block Block::fromHex(const std::string& hex) {
@@ -48,7 +48,7 @@ Block Block::fromHex(const std::string& hex) {
         h = h.substr(2);
     }
 
-    Bytes raw = fromHex(h);
+    Bytes raw = gambit::fromHex(h);
     auto root = rlp::decode(raw);
 
     if (!root.isList || root.list.size() < 10) {
@@ -85,7 +85,7 @@ Block Block::fromHex(const std::string& hex) {
 
     for (const auto& item : txListNode.list) {
         // item.bytes is raw RLP for a single signed tx
-        std::string txHex = "0x" + toHex(item.bytes);
+        std::string txHex = "0x" + gambit::toHex(item.bytes);
         Transaction tx = Transaction::fromHex(txHex);
         b.transactions.push_back(std::move(tx));
     }
@@ -154,7 +154,7 @@ Block Block::rlpDecode(const Bytes& raw) {
     if (!txListNode.isList) throw std::runtime_error("Block txs must be list");
 
     for (const auto& item : txListNode.list) {
-        Transaction tx = Transaction::fromHex("0x" + toHex(item.bytes));
+        Transaction tx = Transaction::fromHex("0x" + gambit::toHex(item.bytes));
         b.transactions.push_back(std::move(tx));
     }
 

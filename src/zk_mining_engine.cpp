@@ -4,13 +4,10 @@ namespace gambit {
 
 Block ZkMiningEngine::buildBlockTemplate(Blockchain& chain) {
     const auto& mempool = chain.mempool();
-    if (mempool.empty()) {
-        throw std::runtime_error("No transactions to mine");
-    }
 
     std::string before = chain.state().root();
 
-    // Apply txs to a temporary state
+    // Apply txs to a temporary state (if any)
     State temp = chain.state();
     for (const auto& tx : mempool) {
         temp.applyTransaction(tx.from, tx);
@@ -30,7 +27,7 @@ Block ZkMiningEngine::buildBlockTemplate(Blockchain& chain) {
         proof
     );
 
-    b.transactions = mempool;
+    b.transactions = mempool;  // may be empty
     return b;
 }
 

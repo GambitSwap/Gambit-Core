@@ -1,6 +1,18 @@
 #include "gambit/p2p_peer.hpp"
-#include <unistd.h>
-#include <sys/socket.h>
+
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #pragma comment(lib, "ws2_32.lib")
+    #define SHUT_RDWR SD_BOTH
+    #define MSG_WAITALL 0x8
+    inline int close(int fd) { return closesocket(fd); }
+    typedef int ssize_t;
+#else
+    #include <unistd.h>
+    #include <sys/socket.h>
+#endif
+
 #include <stdexcept>
 
 namespace gambit {
@@ -32,13 +44,21 @@ void Peer::stop() {
 void Peer::send(const Message& msg) {
     std::lock_guard<std::mutex> lock(sendMutex_);
     auto encoded = msg.encode();
+#ifdef _WIN32
+    ::send(socketFd_, reinterpret_cast<const char*>(encoded.data()), static_cast<int>(encoded.size()), 0);
+#else
     ::send(socketFd_, encoded.data(), encoded.size(), 0);
+#endif
 }
 
 void Peer::recvLoop() {
     while (running_) {
         std::uint8_t header[5];
+#ifdef _WIN32
+        ssize_t n = recv(socketFd_, reinterpret_cast<char*>(header), 5, MSG_WAITALL);
+#else
         ssize_t n = recv(socketFd_, header, 5, MSG_WAITALL);
+#endif
         if (n <= 0) break;
 
         std::uint32_t len =
@@ -48,7 +68,11 @@ void Peer::recvLoop() {
             (header[4]);
 
         std::vector<std::uint8_t> payload(len);
+#ifdef _WIN32
+        n = recv(socketFd_, reinterpret_cast<char*>(payload.data()), static_cast<int>(len), MSG_WAITALL);
+#else
         n = recv(socketFd_, payload.data(), len, MSG_WAITALL);
+#endif
         if (n <= 0) break;
 
         Message msg;

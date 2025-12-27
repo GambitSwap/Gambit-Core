@@ -22,6 +22,8 @@ struct NodeConfig {
     uint32_t mineBlocks = 0;  // 0 = don't mine specific blocks
     uint16_t p2pPort = 30303;
     uint16_t rpcPort = 8545;
+    uint64_t chainId = 1337;
+    uint64_t premineAmount = 1000000;  // Default premine amount
 };
 
 void printHelp(const char* programName) {
@@ -34,6 +36,7 @@ void printHelp(const char* programName) {
     std::cout << "  --mine-blocks=<n>   Mine N blocks then continue running\n";
     std::cout << "  --p2p-port=<port>   Set P2P port (default: 30303)\n";
     std::cout << "  --rpc-port=<port>   Set RPC port (default: 8545)\n";
+    std::cout << "  --chain-id=<id>     Set chain ID (default: 1337)\n";
     std::cout << "\nExamples:\n";
     std::cout << "  " << programName << " --mine-blocks=10 --enable-rpc\n";
     std::cout << "  " << programName << " --auto-mining --rpc-port=8080\n";
@@ -99,6 +102,15 @@ bool parseArgs(int argc, char* argv[], NodeConfig& config) {
                 return false;
             }
         }
+        else if (arg.rfind("--chain-id=", 0) == 0) {
+            std::string idStr = arg.substr(11);
+            try {
+                config.chainId = std::stoull(idStr);
+            } catch (...) {
+                std::cerr << "Error: Invalid chain ID: " << idStr << "\n";
+                return false;
+            }
+        }
         else {
             std::cerr << "Error: Unknown option: " << arg << "\n";
             std::cerr << "Use --help for usage information.\n";
@@ -116,32 +128,42 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "=== Gambit Node Starting ===\n";
 
-    // Start Genesis Creation
+    // ========================================
+    // Genesis Configuration
+    // ========================================
+    // Using deterministic dev keypairs for reproducible testing.
+    // In production, these would be loaded from a config file or generated once.
+    
+    // Dev keypair - deterministic seed for testing
+    // Private key: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+    // (This is a well-known Hardhat/Foundry dev key - DO NOT use in production!)
+    Bytes32 devPrivKey = {
+        0xac, 0x09, 0x74, 0xbe, 0xc3, 0x9a, 0x17, 0xe3,
+        0x6b, 0xa4, 0xa6, 0xb4, 0xd2, 0x38, 0xff, 0x94,
+        0x4b, 0xac, 0xb4, 0x78, 0xcb, 0xed, 0x5e, 0xfc,
+        0xae, 0x78, 0x4d, 0x7b, 0xf4, 0xf2, 0xff, 0x80
+    };
+    
+    KeyPair devKey = KeyPair::fromPrivateKey(devPrivKey);
+    Address coinbase = devKey.address();
 
-    std::cout << "=== Creating Gambit Genesis ===\n";
-    // 1. Create keypairs
-    KeyPair kpA = KeyPair::random();
-    KeyPair kpB = KeyPair::random();
+    std::cout << "\n=== Genesis Configuration ===\n";
+    std::cout << "Chain ID:      " << config.chainId << "\n";
+    std::cout << "Coinbase:      " << coinbase.toHex() << "\n";
+    std::cout << "Premine:       " << config.premineAmount << "\n";
 
-    Address addrA = kpA.address();
-    Address addrB = kpB.address();
-
-    std::cout << "Address A: " << addrA.toHex() << "\n";
-    std::cout << "Address B: " << addrB.toHex() << "\n";
-
-    // 2. Genesis config
+    // Create genesis config
     GenesisConfig genesis;
-    genesis.chainId = 1337;
-    genesis.premine.push_back({ addrA, 1000 });
+    genesis.chainId = config.chainId;
+    genesis.premine.push_back({ coinbase, config.premineAmount });
 
-    // 3. Blockchain
+    // Initialize blockchain with genesis
     Blockchain chain(genesis);
     
-    std::cout << "=== Gambit Genesis Created ===\n";
-    
-    // add in genesis verification;
-    
-    std::cout << "Genesis block hash: " << chain.chain().back().hash << "\n";
+    const Block& genesisBlock = chain.chain().front();
+    std::cout << "Genesis Hash:  " << genesisBlock.hash << "\n";
+    std::cout << "State Root:    " << genesisBlock.stateAfter << "\n";
+    std::cout << "==============================\n\n";
 
     // 4. P2P node (optional)
     std::unique_ptr<P2PNode> node;
@@ -200,14 +222,17 @@ int main(int argc, char* argv[]) {
     }
 
     // Print active configuration
-    std::cout << "\n=== Configuration ===\n";
+    std::cout << "\n=== Node Status ===\n";
+    std::cout << "Chain ID:    " << config.chainId << "\n";
     std::cout << "P2P:         " << (config.enableP2P ? "enabled (port " + std::to_string(config.p2pPort) + ")" : "disabled") << "\n";
     std::cout << "RPC:         " << (config.enableRPC ? "enabled (port " + std::to_string(config.rpcPort) + ")" : "disabled") << "\n";
     std::cout << "Auto-mining: " << (config.enableMining ? "enabled" : "disabled") << "\n";
+    std::cout << "Block height: " << chain.chain().size() - 1 << "\n";
     if (config.mineBlocks > 0) {
         std::cout << "Mine blocks: " << config.mineBlocks << " (completed)\n";
     }
-    std::cout << "====================\n\n";
+    std::cout << "===================\n\n";
+    std::cout << "Node running. Press Ctrl+C to stop.\n";
 
     // Keep node alive
     while (true) {

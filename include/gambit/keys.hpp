@@ -32,6 +32,8 @@ namespace gambit
     public:
         KeyPair();
         static KeyPair random();
+        static KeyPair fromPrivateKey(const Bytes32& privKey);
+        static KeyPair fromPrivateKey(const std::vector<std::uint8_t>& privKey);
 
         const std::vector<std::uint8_t> &privateKey() const { return priv_; }
         const std::vector<std::uint8_t> &publicKey() const { return pub_; } // 64 bytes (x||y)
@@ -43,11 +45,12 @@ namespace gambit
                            const Signature &sig,
                            const std::vector<std::uint8_t> &pubKey);
 
+        // Expose context for Keys class
+        static secp256k1_context *context();
+
     private:
         std::vector<std::uint8_t> priv_; // 32 bytes
         std::vector<std::uint8_t> pub_;  // 64 bytes (uncompressed, no prefix)
-
-        static secp256k1_context *context();
     };
 
 } // namespace gambit

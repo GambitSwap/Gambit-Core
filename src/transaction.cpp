@@ -72,12 +72,6 @@ namespace gambit
         return keccak256_32(rlp);
     }
 
-    void Transaction::signWith(const KeyPair &key)
-    {
-        Bytes32 hash = signingHash();
-        sig = key.sign(hash, chainId);
-    }
-
     bool Transaction::verifySignature() const
     {
         try
@@ -113,7 +107,7 @@ namespace gambit
             h = h.substr(2);
         }
 
-        Bytes raw = fromHex(h);
+        Bytes raw = gambit::fromHex(h);
         auto root = rlp::decode(raw);
 
         if (!root.isList || root.list.size() < 9)
@@ -179,7 +173,7 @@ namespace gambit
     {
         Bytes encoded = rlpEncodeSigned();
         Bytes h = keccak256(encoded);
-        return "0x" + toHex(h);
+        return "0x" + gambit::toHex(h);
     }
 
     void Transaction::signWith(const KeyPair &key)

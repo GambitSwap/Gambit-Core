@@ -1,8 +1,19 @@
 #include "gambit/p2p_node.hpp"
 #include "gambit/hash.hpp"
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
+
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #pragma comment(lib, "ws2_32.lib")
+    typedef int socklen_t;
+    #define SHUT_RDWR SD_BOTH
+    inline int close(int fd) { return closesocket(fd); }
+#else
+    #include <sys/socket.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+#endif
+
 #include <cstring>
 
 namespace gambit {
@@ -13,7 +24,12 @@ P2PNode::P2PNode(Blockchain& chain, std::uint16_t listenPort)
 void P2PNode::start() {
     running_ = true;
 
-    listenSock_ = socket(AF_INET, SOCK_STREAM, 0);
+#ifdef _WIN32
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
+
+    listenSock_ = static_cast<int>(socket(AF_INET, SOCK_STREAM, 0));
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -39,6 +55,10 @@ void P2PNode::stop() {
     for (auto& p : peers_) {
         p->stop();
     }
+
+#ifdef _WIN32
+    WSACleanup();
+#endif
 }
 
 void P2PNode::acceptLoop() {
@@ -127,14 +147,25 @@ void P2PNode::onMessage(const Message& msg, std::shared_ptr<Peer> peer) {
 
 void P2PNode::handleNewTx(const Message& msg) {
     std::string hex(msg.payload.begin(), msg.payload.end());
-    // TODO: implement Transaction::fromHex
-    // For now, ignore
+    try {
+        Transaction tx = Transaction::fromHex(hex);
+        std::string err;
+        if (chain_.validateTransaction(tx, err)) {
+            chain_.addTransaction(tx);
+        }
+    } catch (...) {
+        // Invalid transaction, ignore
+    }
 }
 
 void P2PNode::handleNewBlock(const Message& msg) {
     std::string hex(msg.payload.begin(), msg.payload.end());
-    // TODO: implement Block::fromHex
-    // For now, ignore
+    try {
+        Block block = Block::fromHex(hex);
+        chain_.addBlock(block);
+    } catch (...) {
+        // Invalid block, ignore
+    }
 }
 
 } // namespace gambit

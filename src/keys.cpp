@@ -51,6 +51,40 @@ KeyPair KeyPair::random() {
     return kp;
 }
 
+KeyPair KeyPair::fromPrivateKey(const Bytes32& privKey) {
+    KeyPair kp;
+    kp.priv_.assign(privKey.begin(), privKey.end());
+
+    if (!secp256k1_ec_seckey_verify(context(), kp.priv_.data())) {
+        throw std::runtime_error("Invalid private key");
+    }
+
+    // Derive public key
+    secp256k1_pubkey pubkey;
+    if (!secp256k1_ec_pubkey_create(context(), &pubkey, kp.priv_.data())) {
+        throw std::runtime_error("Failed to create secp256k1 public key");
+    }
+
+    // Serialize uncompressed (65 bytes: 0x04 + 64 bytes)
+    std::uint8_t out[65];
+    size_t outlen = 65;
+    secp256k1_ec_pubkey_serialize(context(), out, &outlen, &pubkey, SECP256K1_EC_UNCOMPRESSED);
+
+    // Drop prefix 0x04
+    kp.pub_.assign(out + 1, out + 65);
+
+    return kp;
+}
+
+KeyPair KeyPair::fromPrivateKey(const std::vector<std::uint8_t>& privKey) {
+    if (privKey.size() != 32) {
+        throw std::runtime_error("Private key must be 32 bytes");
+    }
+    Bytes32 arr;
+    std::copy(privKey.begin(), privKey.end(), arr.begin());
+    return fromPrivateKey(arr);
+}
+
 Address KeyPair::address() const {
     return Address::fromPublicKey(pub_);
 }
@@ -130,6 +164,8 @@ Address Keys::recoverAddress(const Bytes32& msgHash,
                              const Signature& sig,
                              std::uint64_t chainId)
 {
+    secp256k1_context* ctx = KeyPair::context();
+    
     // EIP-155: v = recId + 35 + 2*chainId
     int recId;
     if (sig.v == 0 || sig.v == 1) {

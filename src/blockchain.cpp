@@ -104,14 +104,9 @@ namespace gambit
     {
         std::lock_guard<std::mutex> lock(mutex_);
 
-        if (mempool_.empty())
-        {
-            throw std::runtime_error("No transactions to mine");
-        }
-
         std::string before = state_.root();
 
-        // Apply transactions
+        // Apply transactions (if any)
         for (const auto &tx : mempool_)
         {
             state_.applyTransaction(tx.from, tx);
@@ -151,7 +146,9 @@ namespace gambit
             txRoot,
             proof);
 
-        block.transactions = mempool_; // attach txn
+        block.transactions = mempool_; // attach txn (may be empty)
+        block.receipts = receipts;
+        block.receiptsRoot = receiptsRoot;
 
         chain_.push_back(block);
         mempool_.clear();

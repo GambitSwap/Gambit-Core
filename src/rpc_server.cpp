@@ -3,9 +3,19 @@
 #include "gambit/address.hpp"
 #include "gambit/transaction.hpp"
 
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
+#ifdef _WIN32
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #pragma comment(lib, "ws2_32.lib")
+    typedef int socklen_t;
+    #define SHUT_RDWR SD_BOTH
+    inline int close(int fd) { return closesocket(fd); }
+#else
+    #include <sys/socket.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+#endif
+
 #include <cstring>
 #include <iostream>
 
@@ -19,10 +29,20 @@ namespace gambit
     {
         running_ = true;
 
-        listenSock_ = socket(AF_INET, SOCK_STREAM, 0);
+#ifdef _WIN32
+        WSADATA wsaData;
+        WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 
+        listenSock_ = static_cast<int>(socket(AF_INET, SOCK_STREAM, 0));
+
+#ifdef _WIN32
+        char opt = 1;
+        setsockopt(listenSock_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#else
         int opt = 1;
         setsockopt(listenSock_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#endif
 
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
@@ -58,6 +78,9 @@ namespace gambit
         {
             acceptThread_.join();
         }
+#ifdef _WIN32
+        WSACleanup();
+#endif
     }
 
     void RpcServer::acceptLoop()
@@ -82,7 +105,11 @@ namespace gambit
     {
         constexpr std::size_t BUF_SIZE = 8192;
         char buf[BUF_SIZE];
+#ifdef _WIN32
+        int n = recv(clientFd, buf, static_cast<int>(BUF_SIZE), 0);
+#else
         ssize_t n = recv(clientFd, buf, BUF_SIZE, 0);
+#endif
         if (n <= 0)
         {
             close(clientFd);
@@ -92,7 +119,11 @@ namespace gambit
         std::string req(buf, buf + n);
         std::string resp = handleRequest(req);
 
+#ifdef _WIN32
+        send(clientFd, resp.data(), static_cast<int>(resp.size()), 0);
+#else
         send(clientFd, resp.data(), resp.size(), 0);
+#endif
         close(clientFd);
     }
 
@@ -155,34 +186,8 @@ namespace gambit
             std::string addr = jsonExtractParamByIndex(json, 0);
             return handle_getTransactionCount(id, addr);
         }
-        else if (method == "miner_start")
-        {
-            miner_.start();
-            return jsonResult(id, "\"ok\"");
-        }
-        else if (method == "miner_stop")
-        {
-            miner_.stop();
-            return jsonResult(id, "\"ok\"");
-        }
-        else if (method == "miner_setInterval")
-        {
-            std::string ms = jsonExtractParamByIndex(json, 0);
-            miner_.setInterval(std::chrono::milliseconds(std::stoull(ms)));
-            return jsonResult(id, "\"ok\"");
-        }
-        else if (method == "eth_getWork")
-        {
-            Block b = miner_.getWork();
-            return jsonResult(id, "\"" + b.toHex() + "\"");
-        }
-        else if (method == "eth_submitWork")
-        {
-            std::string blockHex = jsonExtractParamByIndex(json, 0);
-            Block b = Block::fromHex(blockHex);
-            bool ok = miner_.submitWork(b);
-            return jsonResult(id, ok ? "\"ok\"" : "\"invalid\"");
-        }
+        // TODO: miner_start, miner_stop, miner_setInterval, eth_getWork, eth_submitWork
+        // These require passing a Miner reference to RpcServer
 
         return jsonError(id, -32601, "Method not found");
     }

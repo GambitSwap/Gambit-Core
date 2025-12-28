@@ -94,6 +94,27 @@ Prerequisites
 This repository includes required crypto helpers under `external/`:
 - [secp256k1](external/secp256k1)
 - [tiny-keccak](external/tiny-keccak/keccak.hpp)
+- [openssl](external/openssl) — built from source during CMake configuration
+
+## Build prerequisites
+
+### All platforms
+- CMake 3.15 or higher
+- C++17 compatible compiler (MSVC 2019+, GCC 9+, Clang 10+)
+
+### Windows (MSVC)
+- **Perl** (required to build OpenSSL from source)
+  - Install [Strawberry Perl](https://strawberryperl.com/) or [ActivePerl](https://www.activestate.com/products/perl/)
+  - Or run `install_deps.bat` (requires Administrator or Chocolatey)
+- Visual Studio 2019 Build Tools or later (for MSVC compiler)
+
+### macOS
+- Xcode Command Line Tools (`xcode-select --install`)
+
+### Linux
+- GCC or Clang development tools (`build-essential` on Ubuntu/Debian)
+
+## Build
 
 Build (Unix: Linux / macOS)
 ```sh

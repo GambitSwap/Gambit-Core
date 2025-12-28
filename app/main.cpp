@@ -11,6 +11,7 @@
 #include "gambit/rpc_server.hpp"
 #include "gambit/miner.hpp"
 #include "gambit/zk_mining_engine.hpp"
+#include "gambit/wallet.hpp"
 
 using namespace gambit;
 
@@ -119,6 +120,51 @@ bool parseArgs(int argc, char* argv[], NodeConfig& config) {
     }
     return true;
 }
+
+void walletCLI() {
+    std::string command;
+    std::cout << "\n[GAMBIT WALLET]\n";
+    std::cout << "Commands: create, load, add-account, list, export-key, export-mnemonic\n";
+    std::cout << "> ";
+    std::getline(std::cin, command);
+    
+    if (command == "create") {
+        std::string path;
+        std::cout << "Wallet file path: ";
+        std::getline(std::cin, path);
+        
+        std::string password;
+        std::cout << "Set password: ";
+        std::getline(std::cin, password);
+        
+        auto w = Wallet::create(path, password);
+        w->addAccount("default", "m/44'/60'/0'/0/0");
+        w->save(password);
+        std::cout << "✓ Wallet created and saved\n";
+    }
+    else if (command == "load") {
+        std::string path, password;
+        std::cout << "Wallet file path: ";
+        std::getline(std::cin, path);
+        std::cout << "Password: ";
+        std::getline(std::cin, password);
+        
+        auto w = Wallet::load(path, password);
+        auto accounts = w->listAccounts();
+        
+        std::cout << "Accounts:\n";
+        for (const auto& acc : accounts) {
+            std::cout << "  " << acc.name << ": " << acc.address.toHex() << "\n";
+        }
+    }
+    else if (command == "add-account") {
+        // Similar pattern
+    }
+    else {
+        std::cout << "Unknown command\n";
+    }
+}
+
 
 int main(int argc, char* argv[]) {
     // Parse command line arguments

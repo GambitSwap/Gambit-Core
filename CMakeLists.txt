@@ -27,12 +27,15 @@ add_library(gambit_core
     src/genesis.cpp
     src/zk.cpp
     src/zk_mining_engine.cpp
+    src/zk_seeder.cpp
+    src/zk_seeder_client.cpp
     src/block.cpp
     src/blockchain.cpp
     src/miner.cpp
     src/p2p_message.cpp
     src/p2p_peer.cpp
     src/p2p_node.cpp
+    src/dns_seed.cpp
     src/rpc_server.cpp
     src/mpt.cpp
     src/receipt.cpp

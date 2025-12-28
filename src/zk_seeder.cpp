@@ -38,8 +38,8 @@ bool ZkSeederService::verifyProof(const PeerInfo& peer, const Bytes& proof, std:
 
     // Serialize message
     Bytes msg;
-    Bytes nodeBytes = peer.nodeId.toBytes();
-    msg.insert(msg.end(), nodeBytes.begin(), nodeBytes.end());
+    const auto& addrBytes = peer.nodeId.bytes();
+    msg.insert(msg.end(), addrBytes.begin(), addrBytes.end());
     msg.insert(msg.end(), peer.ip.begin(), peer.ip.end());
     msg.push_back(static_cast<std::uint8_t>(peer.port >> 8));
     msg.push_back(static_cast<std::uint8_t>(peer.port & 0xFF));
@@ -47,7 +47,7 @@ bool ZkSeederService::verifyProof(const PeerInfo& peer, const Bytes& proof, std:
         msg.push_back(static_cast<std::uint8_t>((peer.lastSeen >> (8 * i)) & 0xFF));
     }
 
-    Bytes32 msgHash = keccak256(msg);
+    Bytes32 msgHash = keccak256_32(msg);
 
     // Parse proof -> Signature (you define this format)
     if (proof.size() != 65) {

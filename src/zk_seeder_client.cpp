@@ -25,8 +25,8 @@ Bytes ZkSeederClient::buildSeederProof(const KeyPair& key,
 
     // 3. Serialize message exactly as verifyProof expects
     Bytes msg;
-    Bytes nodeBytes = peer.nodeId.toBytes();
-    msg.insert(msg.end(), nodeBytes.begin(), nodeBytes.end());
+    const auto& addrBytes = peer.nodeId.bytes();
+    msg.insert(msg.end(), addrBytes.begin(), addrBytes.end());
 
     msg.insert(msg.end(), peer.ip.begin(), peer.ip.end());
 
@@ -37,7 +37,7 @@ Bytes ZkSeederClient::buildSeederProof(const KeyPair& key,
         msg.push_back(static_cast<std::uint8_t>((peer.lastSeen >> (8 * i)) & 0xFF));
     }
 
-    Bytes32 msgHash = keccak256(msg);
+    Bytes32 msgHash = keccak256_32(msg);
 
     // 4. Sign with node key (secp256k1 ECDSA)
     Signature sig = key.sign(msgHash, chainId);

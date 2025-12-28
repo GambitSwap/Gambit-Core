@@ -5,6 +5,8 @@
 #include "gambit/p2p_node.hpp"
 #include "gambit/zk_seeder.hpp"
 
+#include <map>
+
 #ifdef _WIN32
     #include <winsock2.h>
     #include <ws2tcpip.h>
@@ -24,13 +26,8 @@
 namespace gambit
 {
 
-    RpcServer::RpcServer(Blockchain &chain, std::uint16_t port, P2PNode& p2p, ZkSeederService& seeder)
+    RpcServer::RpcServer(Blockchain &chain, std::uint16_t port)
         : chain_(chain), port_(port) {}
-
-    private:
-        Blockchain& chain_;
-        P2PNode& p2p_;
-        ZkSeederService& seeder_;
 
     void RpcServer::start()
     {
@@ -193,74 +190,6 @@ namespace gambit
             std::string addr = jsonExtractParamByIndex(json, 0);
             return handle_getTransactionCount(id, addr);
         } 
-        else if (method == "seeder_register") {
-            auto params = jsonExtractObjectParams(json); // however you parse
-        
-            std::string ip     = params["ip"];
-            std::string nodeId = params["nodeId"];
-            std::string proofH = params["proof"];
-            std::uint16_t port = static_cast<std::uint16_t>(std::stoul(params["port"]));
-        
-            PeerInfo peer;
-            peer.ip     = ip;
-            peer.port   = port;
-            peer.nodeId = Address::fromHex(nodeId);
-            peer.lastSeen = 0; // will be overridden
-        
-            Bytes proof = fromHex(strip0x(proofH));
-        
-            std::string err;
-            if (!seeder_.registerPeer(peer, proof, err)) {
-                return jsonError(id, -32000, err);
-            }
-        
-            return jsonResult(id, "\"ok\"");
-        }
-        else if (method == "seeder_getPeers") {
-            std::size_t limit = 32;
-            if (hasParam(json, 0)) {
-                limit = std::stoul(jsonExtractParamByIndex(json, 0));
-            }
-        
-            auto peers = seeder_.getPeers(limit);
-        
-            // build JSON
-            std::string out = "[";
-            bool first = true;
-            for (const auto& p : peers) {
-                if (!first) out += ",";
-                first = false;
-                out += "{";
-                out += "\"nodeId\":\"" + p.nodeId.toHex() + "\",";
-                out += "\"ip\":\""     + p.ip              + "\",";
-                out += "\"port\":"     + std::to_string(p.port) + ",";
-                out += "\"lastSeen\":" + std::to_string(p.lastSeen) + ",";
-                out += "\"score\":"    + std::to_string(p.score);
-                out += "}";
-            }
-            out += "]";
-        
-            return jsonResult(id, out);
-        }
-        else if (method == "seeder_getMyRecord") {
-            std::string nodeIdH = jsonExtractParamByIndex(json, 0); // "0x..."
-            Address nodeId = Address::fromHex(nodeIdH);
-        
-            PeerInfo p;
-            if (!seeder_.getRecordFor(nodeId, p)) {
-                return jsonResult(id, "null");
-            }
-        
-            std::string out = "{";
-            out += "\"nodeId\":\"" + p.nodeId.toHex() + "\",";
-            out += "\"ip\":\""     + p.ip              + "\",";
-            out += "\"port\":"     + std::to_string(p.port) + ",";
-            out += "\"lastSeen\":" + std::to_string(p.lastSeen) + ",";
-            out += "\"score\":"    + std::to_string(p.score);
-            out += "}";
-        
-            return jsonResult(id, out);
-        }
         
         // TODO: miner_start, miner_stop, miner_setInterval, eth_getWork, eth_submitWork
         // These require passing a Miner reference to RpcServer
@@ -545,6 +474,34 @@ namespace gambit
             currentIndex++;
             pos = end + 1;
         }
+    }
+
+    // Stub helper functions for seeder methods (currently not used)
+    static std::map<std::string, std::string> jsonExtractObjectParams(const std::string& json) {
+        return {}; // Not implemented; seeder methods disabled
+    }
+
+    static std::string strip0x(const std::string& s) {
+        if (s.rfind("0x", 0) == 0 || s.rfind("0X", 0) == 0) {
+            return s.substr(2);
+        }
+        return s;
+    }
+
+    static bool hasParam(const std::string& json, std::size_t index) {
+        // Simple check: count commas in params array
+        auto pos = json.find("\"params\"");
+        if (pos == std::string::npos) return false;
+        auto arrStart = json.find('[', pos);
+        if (arrStart == std::string::npos) return false;
+        auto arrEnd = json.find(']', arrStart);
+        if (arrEnd == std::string::npos) return false;
+        
+        std::size_t count = 0;
+        for (auto i = arrStart + 1; i < arrEnd; ++i) {
+            if (json[i] == ',') count++;
+        }
+        return count >= index;
     }
 
 } // namespace gambit

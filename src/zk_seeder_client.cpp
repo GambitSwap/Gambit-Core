@@ -1,5 +1,7 @@
 #include "gambit/zk_seeder_client.hpp"
 #include "gambit/hash.hpp"
+#include <chrono>
+#include <stdexcept>
 
 namespace gambit {
 

@@ -3,35 +3,22 @@
 #include "gambit/keys.hpp"
 #include <chrono>
 #include <algorithm>
-struct SeederPublicInputs {
-    Address nodeId;
-    std::string ip;
-    std::uint16_t port;
-    std::uint64_t timestamp;
-};
-
-struct SeederWitness {
-    Bytes32 sk;       // or some representation of secret key
-};
 
 namespace gambit {
+    struct SeederPublicInputs {
+        Address nodeId;
+        std::string ip;
+        std::uint16_t port;
+        std::uint64_t timestamp;
+    };
+    
+    struct SeederWitness {
+        Bytes32 sk;       // or some representation of secret key
+    };
 
-Proof ZkSeederProver::prove(const SeederPublicInputs& pub, const SeederWitness& wit);
-bool ZkSeederVerifier::verify(const SeederPublicInputs& pub, const Proof& proof);
-bool ZkSeederService::verifyProof(const PeerInfo& peer, const Bytes& proof, std::string& err) const {
-    if (isEcdsaProof(proof)) {
-        // v1 path
-    } else {
-        // v2 zk path
-        SeederPublicInputs pub{ peer.nodeId, peer.ip, peer.port, peer.lastSeen };
-        Proof zkProof = deserializeProof(proof);
-        if (!ZkSeederVerifier::verify(pub, zkProof)) {
-            err = "Invalid zk proof";
-            return false;
-        }
-    }
-    return true;
-}
+// Legacy declarations removed: ZkSeederProver/ZkSeederVerifier types are not
+// present in the current public headers. Seeder service uses signature-based
+// verification (see `verifyProof`) and does not require external prover APIs.
 
 ZkSeederService::ZkSeederService(Blockchain& chain)
     : chain_(chain) {}

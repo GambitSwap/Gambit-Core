@@ -5,7 +5,7 @@
 #include <mutex>
 
 #include "gambit/address.hpp"
-#include "gambit/bytes.hpp"
+#include "gambit/hash.hpp"
 #include "gambit/blockchain.hpp"
 
 namespace gambit {

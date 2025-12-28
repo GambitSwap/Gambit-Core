@@ -25,6 +25,8 @@ public:
     const std::vector<Block>& chain() const { return chain_; }
     const State& state() const { return state_; }
 
+    std::uint64_t chainId() const { return chainId_; }
+
     // Simple accessors for RPC
     const std::vector<Transaction>& mempool() const { return mempool_; }
     

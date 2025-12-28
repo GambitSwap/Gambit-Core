@@ -22,6 +22,7 @@ public:
     ZkProof       proof;
     std::uint64_t timestamp{0};
     std::string   hash;
+    std::uint64_t nonce{0};
 
     std::vector<Transaction> transactions;
     std::vector<Receipt> receipts;

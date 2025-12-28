@@ -1,5 +1,8 @@
 #include "gambit/p2p_node.hpp"
 #include "gambit/hash.hpp"
+#include "gambit/dns_seed.hpp"
+#include <iostream>
+
 
 #ifdef _WIN32
     #include <winsock2.h>
@@ -18,10 +21,28 @@
 
 namespace gambit {
 
+    // Minimal stub: seeder bootstrap is application-specific and optional.
+    void P2PNode::bootstrapWithSeeder() {
+        std::cout << "bootstrapWithSeeder: not implemented; skipping seeder registration\n";
+    }
+
 P2PNode::P2PNode(Blockchain& chain, std::uint16_t listenPort)
-    : chain_(chain), listenPort_(listenPort) {}
+    : chain_(chain), listenPort_(listenPort), keyPair_(KeyPair::random()) {}
 
 void P2PNode::start() {
+    // Setup the DNSSeedManager
+    DNSSeedManager dns;
+
+    const uint16_t defaultPort = 30303;
+
+    // ToDo: Limit the ips to no more than 20 peers
+    auto seedIPs = dns.resolveAll();
+    // ToDo: Check the peer capacity; and join lowest cap first.
+    for (const auto& ip : seedIPs) {
+        std::cout << "[DNS] Found peer: " << ip << "\n";
+        connectTo(ip, defaultPort);
+    }
+
     running_ = true;
 
 #ifdef _WIN32
@@ -40,6 +61,16 @@ void P2PNode::start() {
     listen(listenSock_, 16);
 
     acceptThread_ = std::thread(&P2PNode::acceptLoop, this);
+}
+
+
+// Add the missing methods:
+Address P2PNode::myNodeId() const {
+    return keyPair_.address();
+}
+
+Bytes P2PNode::buildSeederProof(PeerInfo& peer) {
+    return ZkSeederClient::buildSeederProof(keyPair_, peer, chain_.chainId());
 }
 
 void P2PNode::stop() {

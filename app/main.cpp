@@ -11,6 +11,7 @@
 #include "gambit/rpc_server.hpp"
 #include "gambit/miner.hpp"
 #include "gambit/zk_mining_engine.hpp"
+#include "gambit/wallet.hpp"
 
 using namespace gambit;
 
@@ -19,6 +20,8 @@ struct NodeConfig {
     bool enableP2P = true;
     bool enableRPC = false;
     bool enableMining = false;
+    bool enableWallet = false;
+
     uint32_t mineBlocks = 0;  // 0 = don't mine specific blocks
     uint16_t p2pPort = 30303;
     uint16_t rpcPort = 8545;
@@ -110,6 +113,9 @@ bool parseArgs(int argc, char* argv[], NodeConfig& config) {
                 std::cerr << "Error: Invalid chain ID: " << idStr << "\n";
                 return false;
             }
+        }// In parseArgs function, add:
+        else if (arg == "--wallet") {
+            config.enableWallet = true;
         }
         else {
             std::cerr << "Error: Unknown option: " << arg << "\n";
@@ -120,11 +126,60 @@ bool parseArgs(int argc, char* argv[], NodeConfig& config) {
     return true;
 }
 
+void walletCLI() {
+    std::string command;
+    std::cout << "\n[GAMBIT WALLET]\n";
+    std::cout << "Commands: create, load, add-account, list, export-key, export-mnemonic\n";
+    std::cout << "> ";
+    std::getline(std::cin, command);
+    
+    if (command == "create") {
+        std::string path;
+        std::cout << "Wallet file path: ";
+        std::getline(std::cin, path);
+        
+        std::string password;
+        std::cout << "Set password: ";
+        std::getline(std::cin, password);
+        
+        auto w = Wallet::create(path, password);
+        w->addAccount("default", "m/44'/60'/0'/0/0");
+        w->save(password);
+        std::cout << "✓ Wallet created and saved\n";
+    }
+    else if (command == "load") {
+        std::string path, password;
+        std::cout << "Wallet file path: ";
+        std::getline(std::cin, path);
+        std::cout << "Password: ";
+        std::getline(std::cin, password);
+        
+        auto w = Wallet::load(path, password);
+        auto accounts = w->listAccounts();
+        
+        std::cout << "Accounts:\n";
+        for (const auto& acc : accounts) {
+            std::cout << "  " << acc.name << ": " << acc.address.toHex() << "\n";
+        }
+    }
+    else if (command == "add-account") {
+        // Similar pattern
+    }
+    else {
+        std::cout << "Unknown command\n";
+    }
+}
+
+
 int main(int argc, char* argv[]) {
     // Parse command line arguments
     NodeConfig config;
     if (!parseArgs(argc, argv, config)) {
         return 1;
+    }
+    if (config.enableWallet) {
+        walletCLI();
+        return 0;
     }
     std::cout << "=== Gambit Node Starting ===\n";
 
@@ -146,6 +201,16 @@ int main(int argc, char* argv[]) {
     
     KeyPair devKey = KeyPair::fromPrivateKey(devPrivKey);
     Address coinbase = devKey.address();
+/*
+
+    VMRegistry vmRegistry;
+    initBuiltInVMs(vmRegistry);
+    
+    VMPluginLoader loader(vmRegistry);
+    loader.loadFromDirectory("plugins");
+    
+    // now Executor can use any VM type that exists in registry
+*/      
 
     std::cout << "\n=== Genesis Configuration ===\n";
     std::cout << "Chain ID:      " << config.chainId << "\n";
@@ -209,7 +274,10 @@ int main(int argc, char* argv[]) {
         std::cout << "Mining " << config.mineBlocks << " blocks...\n";
         for (uint32_t i = 0; i < config.mineBlocks; ++i) {
             Block block = chain.mineBlock();
-            std::cout << "Mined block #" << block.index << " hash=" << block.hash << "\n";
+            std::cout << "Mined block #" << block.index 
+                      << " hash=" << block.hash
+                      << " proof=" << block.proof.proof
+                      << " (nonce=" << block.nonce << ")\n";
             if (node) {
                 node->broadcastNewBlock(block);
             }

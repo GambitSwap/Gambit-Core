@@ -39,10 +39,14 @@ bool Miner::submitWork(const Block& b) {
 void Miner::loop() {
     while (running_) {
         try {
-            Block b = engine_.buildBlockTemplate(chain_);
-            chain_.addBlock(b);
-            p2p_.broadcastNewBlock(b);
-            std::cout << "[Miner] Mined block #" << b.index << "\n";
+            Block block = engine_.buildBlockTemplate(chain_);
+            chain_.addBlock(block);
+            p2p_.broadcastNewBlock(block);
+            std::cout << "[Miner] Mined block #" << block.index << "\n";
+            std::cout << "Mined block #" << block.index 
+                      << " hash=0x" << block.hash
+                      << " proof=" << block.proof.proof
+                      << " (nonce=" << block.nonce << ")\n";
         } catch (...) {
             // ignore
         }

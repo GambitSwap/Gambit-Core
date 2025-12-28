@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\micha\Desktop\Gambit\GambitCChain\Gambit\build\CMakeFiles\3029ce6a3545facbf892f3eaecccc8d9\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{EC3CB1F6-9CED-3AA2-B6B0-D535355EC199}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

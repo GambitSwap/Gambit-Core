@@ -1,0 +1,9 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Users/micha/Desktop/Gambit/GambitCChain/Gambit/build/cmake_install.cmake",
+		"C:/Users/micha/Desktop/Gambit/GambitCChain/Gambit/build/external/secp256k1/cmake_install.cmake",
+		"C:/Users/micha/Desktop/Gambit/GambitCChain/Gambit/build/app/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

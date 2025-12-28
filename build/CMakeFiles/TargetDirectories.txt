@@ -1,0 +1,6 @@
+C:/Users/micha/Desktop/Gambit/GambitCChain/Gambit/build/CMakeFiles/gambit_core.dir
+C:/Users/micha/Desktop/Gambit/GambitCChain/Gambit/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/micha/Desktop/Gambit/GambitCChain/Gambit/build/CMakeFiles/ZERO_CHECK.dir
+C:/Users/micha/Desktop/Gambit/GambitCChain/Gambit/build/external/secp256k1/CMakeFiles/secp256k1.dir
+C:/Users/micha/Desktop/Gambit/GambitCChain/Gambit/build/external/secp256k1/CMakeFiles/ALL_BUILD.dir
+C:/Users/micha/Desktop/Gambit/GambitCChain/Gambit/build/app/CMakeFiles/gambit_node.dir

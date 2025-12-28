@@ -20,6 +20,8 @@ struct NodeConfig {
     bool enableP2P = true;
     bool enableRPC = false;
     bool enableMining = false;
+    bool enableWallet = false;
+
     uint32_t mineBlocks = 0;  // 0 = don't mine specific blocks
     uint16_t p2pPort = 30303;
     uint16_t rpcPort = 8545;
@@ -111,6 +113,9 @@ bool parseArgs(int argc, char* argv[], NodeConfig& config) {
                 std::cerr << "Error: Invalid chain ID: " << idStr << "\n";
                 return false;
             }
+        }// In parseArgs function, add:
+        else if (arg == "--wallet") {
+            config.enableWallet = true;
         }
         else {
             std::cerr << "Error: Unknown option: " << arg << "\n";
@@ -172,6 +177,10 @@ int main(int argc, char* argv[]) {
     if (!parseArgs(argc, argv, config)) {
         return 1;
     }
+    if (config.enableWallet) {
+        walletCLI();
+        return 0;
+    }
     std::cout << "=== Gambit Node Starting ===\n";
 
     // ========================================
@@ -192,6 +201,16 @@ int main(int argc, char* argv[]) {
     
     KeyPair devKey = KeyPair::fromPrivateKey(devPrivKey);
     Address coinbase = devKey.address();
+/*
+
+    VMRegistry vmRegistry;
+    initBuiltInVMs(vmRegistry);
+    
+    VMPluginLoader loader(vmRegistry);
+    loader.loadFromDirectory("plugins");
+    
+    // now Executor can use any VM type that exists in registry
+*/      
 
     std::cout << "\n=== Genesis Configuration ===\n";
     std::cout << "Chain ID:      " << config.chainId << "\n";
@@ -255,7 +274,10 @@ int main(int argc, char* argv[]) {
         std::cout << "Mining " << config.mineBlocks << " blocks...\n";
         for (uint32_t i = 0; i < config.mineBlocks; ++i) {
             Block block = chain.mineBlock();
-            std::cout << "Mined block #" << block.index << " hash=" << block.hash << "\n";
+            std::cout << "Mined block #" << block.index 
+                      << " hash=" << block.hash
+                      << " proof=" << block.proof.proof
+                      << " (nonce=" << block.nonce << ")\n";
             if (node) {
                 node->broadcastNewBlock(block);
             }

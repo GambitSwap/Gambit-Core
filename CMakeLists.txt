@@ -25,6 +25,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/external/tiny-keccak
     ${CMAKE_CURRENT_SOURCE_DIR}/external/secp256k1/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/external
 )
 
 # Core library
@@ -58,6 +59,10 @@ add_library(gambit_core
 target_link_libraries(gambit_core
     secp256k1
     $<$<BOOL:${OPENSSL_FOUND}>:OpenSSL::Crypto>
+)
+
+target_include_directories(gambit_core PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/external
 )
 
 # Define compile flag if OpenSSL is available

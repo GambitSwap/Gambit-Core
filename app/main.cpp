@@ -21,6 +21,7 @@ struct NodeConfig {
     bool enableRPC = false;
     bool enableMining = false;
     bool enableWallet = false;
+    bool enableGUI = false;
 
     uint32_t mineBlocks = 0;  // 0 = don't mine specific blocks
     uint16_t p2pPort = 30303;
@@ -182,7 +183,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     std::cout << "=== Gambit Node Starting ===\n";
-
+    
     // ========================================
     // Genesis Configuration
     // ========================================

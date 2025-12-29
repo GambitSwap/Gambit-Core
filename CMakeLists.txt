@@ -20,6 +20,34 @@ else()
     set(HAVE_OPENSSL FALSE)
 endif()
 
+
+# Find FLTK (fetch if not available)
+find_package(FLTK QUIET)
+if(NOT FLTK_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+        fltk
+        GIT_REPOSITORY https://github.com/fltk/fltk.git
+        GIT_TAG master
+        SOURCE_SUBDIR .
+    )
+    FetchContent_MakeAvailable(fltk)
+    # After fetching, FLTK should be available as fltk::fltk target
+    set(FLTK_FOUND TRUE)
+endif()
+
+# GUI Application (optional)
+option(GAMBIT_BUILD_GUI "Build Gambit GUI application" ON)
+if(GAMBIT_BUILD_GUI)
+    if(FLTK_FOUND)
+        message(STATUS "FLTK available - building GUI application")
+        add_subdirectory(gui)
+    else()
+        message(STATUS "FLTK not available - skipping GUI application")
+        message(STATUS "To enable GUI, install FLTK from https://www.fltk.org/")
+    endif()
+endif()
+
 # Include dirs
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include

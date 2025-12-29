@@ -1,4 +1,4 @@
 @echo off
 cd build
-cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DGAMBIT_BUILD_GUI=ON
 cmake --build . --config Release

@@ -37,25 +37,25 @@ namespace gambit {
         WSAStartup(MAKEWORD(2,2), &wsa);
     #endif
     
-        for (const auto& seed : seeds_) {
-            addrinfo hints{}, *res = nullptr;
-            hints.ai_family = AF_INET;
-            hints.ai_socktype = SOCK_STREAM;
-    
-            if (getaddrinfo(seed.c_str(), nullptr, &hints, &res) != 0) {
-                continue;
-            }
-    
-            for (auto* p = res; p != nullptr; p = p->ai_next) {
-                char ip[INET_ADDRSTRLEN];
-                sockaddr_in* ipv4 = (sockaddr_in*)p->ai_addr;
-    
-                inet_ntop(AF_INET, &(ipv4->sin_addr), ip, INET_ADDRSTRLEN);
-                results.push_back(ip);
-            }
-    
-            freeaddrinfo(res);
+    for (const auto& seed : seeds_) {
+        addrinfo hints{}, *res = nullptr;
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+
+        if (getaddrinfo(seed.c_str(), nullptr, &hints, &res) != 0) {
+            continue;
         }
+
+        for (auto* p = res; p != nullptr; p = p->ai_next) {
+            char ip[INET_ADDRSTRLEN];
+            sockaddr_in* ipv4 = (sockaddr_in*)p->ai_addr;
+
+            inet_ntop(AF_INET, &(ipv4->sin_addr), ip, INET_ADDRSTRLEN);
+            results.push_back(ip);
+        }
+
+        freeaddrinfo(res);
+    }
     
     #ifdef _WIN32
         WSACleanup();

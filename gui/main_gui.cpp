@@ -17,39 +17,53 @@
 #include <FL/Fl_Scroll.H>
 #include <FL/Fl_Pack.H>
 
-#include "gambit/blockchain.hpp"
-#include "gambit/p2p_node.hpp"
-#include "gambit/rpc_server.hpp"
-#include "gambit/miner.hpp"
-#include "gambit/zk_mining_engine.hpp"
+#include "gambit_gui.hpp"
+#include "gambit/node.hpp"
 #include "gambit/wallet.hpp"
+
+// Forward declare RPC client for remote mode
+#include "rpc_client.hpp"
 
 using namespace gambit;
 
 class GambitGUI {
 public:
-    GambitGUI(uint64_t chainId = 1337)
-        : chainId_(chainId), miningActive_(false) {
-        
-        // Initialize genesis (same as CLI version)
-        Bytes32 devPrivKey = {
-            0xac, 0x09, 0x74, 0xbe, 0xc3, 0x9a, 0x17, 0xe3,
-            0x6b, 0xa4, 0xa6, 0xb4, 0xd2, 0x38, 0xff, 0x94,
-            0x4b, 0xac, 0xb4, 0x78, 0xcb, 0xed, 0x5e, 0xfc,
-            0xae, 0x78, 0x4d, 0x7b, 0xf4, 0xf2, 0xff, 0x80
-        };
-        
-        KeyPair devKey = KeyPair::fromPrivateKey(devPrivKey);
-        Address coinbase = devKey.address();
-        
-        GenesisConfig genesis;
-        genesis.chainId = chainId_;
-        genesis.premine.push_back({ coinbase, 1000000 });
-        
-        chain_ = std::make_unique<Blockchain>(genesis);
-        
+    // Embedded mode - uses Node directly
+    explicit GambitGUI(Node* node)
+        : node_(node), rpcClient_(nullptr), isRemoteMode_(false) {
         createGUI();
         updateStatus();
+        
+        // Set up node callbacks for real-time updates
+        if (node_) {
+            node_->setStatusCallback([this](const std::string& msg) {
+                Fl::lock();
+                appendLog(msg);
+                Fl::unlock();
+                Fl::awake();
+            });
+            
+            node_->setBlockCallback([this](const Block& block) {
+                Fl::lock();
+                updateStatus();
+                Fl::unlock();
+                Fl::awake();
+            });
+        }
+    }
+    
+    // RPC client mode - connects to remote node
+    explicit GambitGUI(const std::string& rpcUrl)
+        : node_(nullptr), rpcClient_(std::make_unique<RpcClient>(rpcUrl)), isRemoteMode_(true) {
+        createGUI();
+        updateStatus();
+        
+        // Start polling for updates in remote mode
+        startPolling();
+    }
+    
+    ~GambitGUI() {
+        stopPolling();
     }
     
     void run() {
@@ -63,17 +77,11 @@ private:
         
         tabs_ = new Fl_Tabs(10, 10, 1180, 780);
         
-        // Dashboard Tab
         createDashboardTab();
-        
-        // Blocks Tab  
         createBlocksTab();
-        
-        // Wallet Tab
         createWalletTab();
-        
-        // Transactions Tab
         createTransactionsTab();
+        createLogTab();
         
         tabs_->end();
         window_->end();
@@ -82,49 +90,45 @@ private:
     void createDashboardTab() {
         Fl_Group* dashboard = new Fl_Group(10, 35, 1180, 755, "Dashboard");
         
-        Fl_Pack* pack = new Fl_Pack(20, 50, 1140, 700);
-        pack->type(Fl_Pack::VERTICAL);
-        pack->spacing(10);
-        
         // Title
-        Fl_Output* title = new Fl_Output(0, 0, 1140, 30);
+        Fl_Output* title = new Fl_Output(20, 50, 400, 30);
         title->value("Gambit Node Status");
-        title->textsize(24);
+        title->textsize(20);
+        title->box(FL_FLAT_BOX);
+        
+        // Mode indicator
+        modeDisplay_ = new Fl_Output(150, 90, 300, 25, "Mode:");
+        modeDisplay_->value(isRemoteMode_ ? "Remote (RPC Client)" : "Embedded");
         
         // Status displays
-        Fl_Group* statusGroup = new Fl_Group(0, 0, 1140, 150);
-        statusGroup->box(FL_DOWN_BOX);
-
-        blockHeightDisplay_ = new Fl_Output(20, 20, 300, 25, "Block Height:");
-        chainIdDisplay_ = new Fl_Output(20, 55, 300, 25, "Chain ID:");
-        p2pStatusDisplay_ = new Fl_Output(20, 90, 300, 25, "P2P Status:");
-        rpcStatusDisplay_ = new Fl_Output(20, 125, 300, 25, "RPC Status:");
+        blockHeightDisplay_ = new Fl_Output(150, 125, 300, 25, "Block Height:");
+        chainIdDisplay_ = new Fl_Output(150, 160, 300, 25, "Chain ID:");
+        p2pStatusDisplay_ = new Fl_Output(150, 195, 300, 25, "P2P Status:");
+        rpcStatusDisplay_ = new Fl_Output(150, 230, 300, 25, "RPC Status:");
         
-        statusGroup->end();
+        // Buttons (only in embedded mode)
+        if (!isRemoteMode_) {
+            miningButton_ = new Fl_Button(20, 280, 150, 30, "Start Mining");
+            miningButton_->callback(miningCallback, this);
+            
+            mineBlockButton_ = new Fl_Button(180, 280, 150, 30, "Mine Block");
+            mineBlockButton_->callback(mineBlockCallback, this);
+        }
         
-        // Buttons
-        Fl_Group* buttonGroup = new Fl_Group(0, 0, 1140, 50);
-        miningButton_ = new Fl_Button(20, 10, 150, 30, "Start Mining");
-        miningButton_->callback(miningCallback, this);
+        // Refresh button (for remote mode)
+        refreshButton_ = new Fl_Button(340, 280, 100, 30, "Refresh");
+        refreshButton_->callback(refreshCallback, this);
         
-        mineBlockButton_ = new Fl_Button(180, 10, 150, 30, "Mine Block");
-        mineBlockButton_->callback(mineBlockCallback, this);
-        
-        buttonGroup->end();
-        
-        pack->end();
         dashboard->end();
     }
     
     void createBlocksTab() {
         Fl_Group* blocksTab = new Fl_Group(10, 35, 1180, 755, "Blocks");
         
-        // Search controls
-        blockSearchInput_ = new Fl_Input(20, 50, 200, 25, "Block Number:");
-        blockSearchButton_ = new Fl_Button(230, 50, 80, 25, "Search");
+        blockSearchInput_ = new Fl_Input(130, 50, 200, 25, "Block Number:");
+        blockSearchButton_ = new Fl_Button(340, 50, 80, 25, "Search");
         blockSearchButton_->callback(searchBlockCallback, this);
         
-        // Block list
         blockDisplay_ = new Fl_Text_Display(20, 85, 1140, 650);
         blockBuffer_ = new Fl_Text_Buffer();
         blockDisplay_->buffer(blockBuffer_);
@@ -161,33 +165,134 @@ private:
         txTab->end();
     }
     
+    void createLogTab() {
+        Fl_Group* logTab = new Fl_Group(10, 35, 1180, 755, "Log");
+        
+        logDisplay_ = new Fl_Text_Display(20, 50, 1140, 700);
+        logBuffer_ = new Fl_Text_Buffer();
+        logDisplay_->buffer(logBuffer_);
+        
+        logTab->end();
+    }
+    
     void updateStatus() {
-        blockHeightDisplay_->value(std::to_string(chain_->chain().size() - 1).c_str());
-        chainIdDisplay_->value(std::to_string(chainId_).c_str());
-        p2pStatusDisplay_->value(p2pNode_ ? "Connected" : "Disconnected");
-        rpcStatusDisplay_->value(rpcServer_ ? "Running" : "Stopped");
-        
-        miningButton_->label(miningActive_ ? "Stop Mining" : "Start Mining");
-        
+        if (isRemoteMode_) {
+            updateStatusFromRPC();
+        } else {
+            updateStatusFromNode();
+        }
         refreshBlocks();
+    }
+    
+    void updateStatusFromNode() {
+        if (!node_) return;
+        
+        blockHeightDisplay_->value(std::to_string(node_->blockHeight()).c_str());
+        chainIdDisplay_->value(std::to_string(node_->chainId()).c_str());
+        p2pStatusDisplay_->value(node_->isP2PConnected() ? "Connected" : "Disconnected");
+        rpcStatusDisplay_->value(node_->isRPCRunning() ? "Running" : "Stopped");
+        
+        if (miningButton_) {
+            miningButton_->label(node_->isMining() ? "Stop Mining" : "Start Mining");
+        }
+    }
+    
+    void updateStatusFromRPC() {
+        if (!rpcClient_) return;
+        
+        try {
+            uint64_t blockNum = rpcClient_->getBlockNumber();
+            blockHeightDisplay_->value(std::to_string(blockNum).c_str());
+            
+            uint64_t chainId = rpcClient_->getChainId();
+            chainIdDisplay_->value(std::to_string(chainId).c_str());
+            
+            p2pStatusDisplay_->value("N/A (Remote)");
+            rpcStatusDisplay_->value("Connected");
+        } catch (const std::exception& e) {
+            rpcStatusDisplay_->value("Connection Error");
+            appendLog(std::string("RPC Error: ") + e.what());
+        }
     }
     
     void refreshBlocks() {
         std::stringstream ss;
-        const auto& chain = chain_->chain();
-        
         ss << "Recent Blocks:\n\n";
         
-        // Show last 10 blocks
+        if (isRemoteMode_) {
+            refreshBlocksFromRPC(ss);
+        } else {
+            refreshBlocksFromNode(ss);
+        }
+        
+        blockBuffer_->text(ss.str().c_str());
+    }
+    
+    void refreshBlocksFromNode(std::stringstream& ss) {
+        if (!node_) return;
+        
+        const auto& chain = node_->blockchain().chain();
         size_t start = chain.size() > 10 ? chain.size() - 10 : 0;
+        
         for (size_t i = start; i < chain.size(); ++i) {
             const Block& block = chain[i];
             ss << "Block #" << block.index 
                << " | Hash: " << block.hash.substr(0, 20) << "..."
                << " | Tx: " << block.transactions.size() << "\n";
         }
+    }
+    
+    void refreshBlocksFromRPC(std::stringstream& ss) {
+        if (!rpcClient_) return;
         
-        blockBuffer_->text(ss.str().c_str());
+        try {
+            uint64_t height = rpcClient_->getBlockNumber();
+            uint64_t start = height > 10 ? height - 10 : 0;
+            
+            for (uint64_t i = start; i <= height; ++i) {
+                auto blockInfo = rpcClient_->getBlockByNumber(i);
+                ss << "Block #" << i 
+                   << " | Hash: " << blockInfo.hash.substr(0, 20) << "..."
+                   << " | Tx: " << blockInfo.txCount << "\n";
+            }
+        } catch (const std::exception& e) {
+            ss << "Error fetching blocks: " << e.what() << "\n";
+        }
+    }
+    
+    void appendLog(const std::string& msg) {
+        if (logBuffer_) {
+            logBuffer_->append((msg + "\n").c_str());
+            // Scroll to bottom
+            if (logDisplay_) {
+                logDisplay_->scroll(logBuffer_->count_lines(0, logBuffer_->length()), 0);
+            }
+        }
+    }
+    
+    // Polling for remote mode
+    void startPolling() {
+        if (!isRemoteMode_) return;
+        
+        polling_ = true;
+        pollThread_ = std::thread([this]() {
+            while (polling_) {
+                std::this_thread::sleep_for(std::chrono::seconds(5));
+                if (polling_) {
+                    Fl::lock();
+                    updateStatus();
+                    Fl::unlock();
+                    Fl::awake();
+                }
+            }
+        });
+    }
+    
+    void stopPolling() {
+        polling_ = false;
+        if (pollThread_.joinable()) {
+            pollThread_.join();
+        }
     }
     
     // Static callback functions
@@ -215,56 +320,30 @@ private:
         static_cast<GambitGUI*>(data)->sendTransaction();
     }
     
+    static void refreshCallback(Fl_Widget*, void* data) {
+        static_cast<GambitGUI*>(data)->updateStatus();
+    }
+    
     void toggleMining() {
-        if (miningActive_) {
-            stopMining();
+        if (!node_) return;
+        
+        if (node_->isMining()) {
+            node_->stopMining();
         } else {
-            startMining();
+            node_->startMining();
         }
-    }
-    
-    void startMining() {
-        if (!miningActive_) {
-            miningActive_ = true;
-            
-            if (!p2pNode_) {
-                p2pNode_ = std::make_unique<P2PNode>(*chain_, 30303);
-                p2pNode_->start();
-            }
-            
-            miningEngine_ = std::make_unique<ZkMiningEngine>();
-            miner_ = std::make_unique<Miner>(*chain_, *p2pNode_, *miningEngine_);
-            miner_->setInterval(std::chrono::seconds(5));
-            miner_->start();
-            
-            updateStatus();
-        }
-    }
-    
-    void stopMining() {
-        if (miningActive_) {
-            miningActive_ = false;
-            if (miner_) {
-                miner_->stop();
-                miner_.reset();
-            }
-            miningEngine_.reset();
-            updateStatus();
-        }
+        updateStatus();
     }
     
     void mineBlock() {
+        if (!node_) return;
+        
         try {
-            Block block = chain_->mineBlock();
-            std::cout << "Mined block #" << block.index << " hash=" << block.hash << std::endl;
-            
-            if (p2pNode_) {
-                p2pNode_->broadcastNewBlock(block);
-            }
-            
+            Block block = node_->mineOneBlock();
+            appendLog("Mined block #" + std::to_string(block.index) + " hash=" + block.hash);
             updateStatus();
         } catch (const std::exception& e) {
-            std::cerr << "Failed to mine block: " << e.what() << std::endl;
+            appendLog(std::string("Failed to mine block: ") + e.what());
         }
     }
     
@@ -272,20 +351,47 @@ private:
         std::string blockNumStr = blockSearchInput_->value();
         try {
             uint64_t blockNum = std::stoull(blockNumStr);
-            const auto& chain = chain_->chain();
-            if (blockNum < chain.size()) {
-                const Block& block = chain[blockNum];
-                std::stringstream ss;
-                ss << "Block #" << block.index << "\n";
-                ss << "Hash: " << block.hash << "\n";
-                ss << "Prev Hash: " << block.prevHash << "\n";
-                ss << "Transactions: " << block.transactions.size() << "\n";
-                blockBuffer_->text(ss.str().c_str());
+            
+            if (isRemoteMode_) {
+                searchBlockFromRPC(blockNum);
             } else {
-                blockBuffer_->text("Block not found");
+                searchBlockFromNode(blockNum);
             }
         } catch (...) {
             blockBuffer_->text("Invalid block number");
+        }
+    }
+    
+    void searchBlockFromNode(uint64_t blockNum) {
+        if (!node_) return;
+        
+        const auto& chain = node_->blockchain().chain();
+        if (blockNum < chain.size()) {
+            const Block& block = chain[blockNum];
+            std::stringstream ss;
+            ss << "Block #" << block.index << "\n";
+            ss << "Hash: " << block.hash << "\n";
+            ss << "Prev Hash: " << block.prevHash << "\n";
+            ss << "Transactions: " << block.transactions.size() << "\n";
+            blockBuffer_->text(ss.str().c_str());
+        } else {
+            blockBuffer_->text("Block not found");
+        }
+    }
+    
+    void searchBlockFromRPC(uint64_t blockNum) {
+        if (!rpcClient_) return;
+        
+        try {
+            auto blockInfo = rpcClient_->getBlockByNumber(blockNum);
+            std::stringstream ss;
+            ss << "Block #" << blockNum << "\n";
+            ss << "Hash: " << blockInfo.hash << "\n";
+            ss << "Prev Hash: " << blockInfo.parentHash << "\n";
+            ss << "Transactions: " << blockInfo.txCount << "\n";
+            blockBuffer_->text(ss.str().c_str());
+        } catch (const std::exception& e) {
+            blockBuffer_->text(("Error: " + std::string(e.what())).c_str());
         }
     }
     
@@ -306,46 +412,47 @@ private:
                 ss << "Address: " << acc.address.toHex() << "\n\n";
             }
             walletBuffer_->text(ss.str().c_str());
-            
-            std::cout << "Wallet created successfully" << std::endl;
+            appendLog("Wallet created successfully");
         } catch (const std::exception& e) {
             std::stringstream ss;
             ss << "Failed to create wallet: " << e.what();
             walletBuffer_->text(ss.str().c_str());
-            std::cerr << "Failed to create wallet: " << e.what() << std::endl;
+            appendLog(ss.str());
         }
     }
     
     void loadWallet() {
-        // Implementation for wallet loading
         walletBuffer_->text("Load wallet functionality not yet implemented");
     }
     
     void sendTransaction() {
-        // Implementation for sending transactions
         txBuffer_->text("Send transaction functionality not yet implemented");
     }
     
-    uint64_t chainId_;
-    std::atomic<bool> miningActive_;
+    // Node reference (embedded mode)
+    Node* node_;
     
-    std::unique_ptr<Blockchain> chain_;
-    std::unique_ptr<P2PNode> p2pNode_;
-    std::unique_ptr<RpcServer> rpcServer_;
-    std::unique_ptr<ZkMiningEngine> miningEngine_;
-    std::unique_ptr<Miner> miner_;
+    // RPC client (remote mode)
+    std::unique_ptr<RpcClient> rpcClient_;
+    bool isRemoteMode_;
+    
+    // Polling thread for remote mode
+    std::atomic<bool> polling_{false};
+    std::thread pollThread_;
     
     // FLTK widgets
     Fl_Window* window_;
     Fl_Tabs* tabs_;
     
+    Fl_Output* modeDisplay_;
     Fl_Output* blockHeightDisplay_;
     Fl_Output* chainIdDisplay_;
     Fl_Output* p2pStatusDisplay_;
     Fl_Output* rpcStatusDisplay_;
     
-    Fl_Button* miningButton_;
-    Fl_Button* mineBlockButton_;
+    Fl_Button* miningButton_ = nullptr;
+    Fl_Button* mineBlockButton_ = nullptr;
+    Fl_Button* refreshButton_;
     
     Fl_Input* blockSearchInput_;
     Fl_Button* blockSearchButton_;
@@ -360,18 +467,55 @@ private:
     Fl_Button* sendTxButton_;
     Fl_Text_Display* txDisplay_;
     Fl_Text_Buffer* txBuffer_;
+    
+    Fl_Text_Display* logDisplay_;
+    Fl_Text_Buffer* logBuffer_;
 };
 
+namespace gambit {
+
+void runGUI(Node& node) {
+    Fl::lock();  // Enable thread-safe FLTK
+    Fl::scheme("gtk+");
+    GambitGUI gui(&node);
+    gui.run();
+}
+
+void runGUIWithRPC(const std::string& rpcUrl) {
+    Fl::lock();  // Enable thread-safe FLTK
+    Fl::scheme("gtk+");
+    GambitGUI gui(rpcUrl);
+    gui.run();
+}
+
+} // namespace gambit
+
+// Standalone main - for gambit_gui executable (RPC client mode only)
+// When building as part of gambit_node, this is excluded
+#ifndef GAMBIT_GUI_ENABLED
 int main(int argc, char* argv[]) {
-    uint64_t chainId = 1337;
+    std::string rpcUrl = "http://127.0.0.1:8545";
     
-    if (argc > 1) {
-        chainId = std::stoull(argv[1]);
+    // Parse command line arguments
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg.rfind("--rpc-url=", 0) == 0) {
+            rpcUrl = arg.substr(10);
+        } else if (arg == "--help" || arg == "-h") {
+            std::cout << "Gambit GUI - Graphical interface for Gambit blockchain\n\n";
+            std::cout << "Usage: " << argv[0] << " [options]\n\n";
+            std::cout << "Options:\n";
+            std::cout << "  --rpc-url=<url>  Connect to node via RPC (default: http://127.0.0.1:8545)\n";
+            std::cout << "  --help           Show this help message\n";
+            std::cout << "\nThe standalone GUI connects to a running Gambit node via RPC.\n";
+            std::cout << "For embedded mode, run: gambit_node --gui\n";
+            return 0;
+        }
     }
     
-    Fl::scheme("gtk+");
-    GambitGUI gui(chainId);
-    gui.run();
+    std::cout << "Connecting to Gambit node at " << rpcUrl << "...\n";
+    gambit::runGUIWithRPC(rpcUrl);
     
     return 0;
 }
+#endif

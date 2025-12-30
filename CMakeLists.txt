@@ -38,12 +38,14 @@ endif()
 
 # GUI Application (optional)
 option(GAMBIT_BUILD_GUI "Build Gambit GUI application" ON)
+set(GAMBIT_GUI_AVAILABLE FALSE)
 if(GAMBIT_BUILD_GUI)
     if(FLTK_FOUND)
-        message(STATUS "FLTK available - building GUI application")
+        message(STATUS "FLTK available - building with GUI support")
+        set(GAMBIT_GUI_AVAILABLE TRUE)
         add_subdirectory(gui)
     else()
-        message(STATUS "FLTK not available - skipping GUI application")
+        message(STATUS "FLTK not available - skipping GUI support")
         message(STATUS "To enable GUI, install FLTK from https://www.fltk.org/")
     endif()
 endif()
@@ -81,6 +83,7 @@ add_library(gambit_core
     src/receipt.cpp
     src/bloom.cpp
     src/wallet.cpp
+    src/node.cpp
     external/tiny-keccak/keccak.cpp
 )
 

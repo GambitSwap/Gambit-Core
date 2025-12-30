@@ -4,31 +4,15 @@
 #include <string>
 #include <cstring>
 
-#include "gambit/blockchain.hpp"
-#include "gambit/p2p_node.hpp"
-#include "gambit/keys.hpp"
-#include "gambit/transaction.hpp"
-#include "gambit/rpc_server.hpp"
-#include "gambit/miner.hpp"
-#include "gambit/zk_mining_engine.hpp"
+#include "gambit/node.hpp"
 #include "gambit/wallet.hpp"
 
+// GUI support - conditionally included
+#ifdef GAMBIT_GUI_ENABLED
+#include "gambit_gui.hpp"
+#endif
+
 using namespace gambit;
-
-// Node configuration toggles
-struct NodeConfig {
-    bool enableP2P = true;
-    bool enableRPC = false;
-    bool enableMining = false;
-    bool enableWallet = false;
-    bool enableGUI = false;
-
-    uint32_t mineBlocks = 0;  // 0 = don't mine specific blocks
-    uint16_t p2pPort = 30303;
-    uint16_t rpcPort = 8545;
-    uint64_t chainId = 1337;
-    uint64_t premineAmount = 1000000;  // Default premine amount
-};
 
 void printHelp(const char* programName) {
     std::cout << "Usage: " << programName << " [options]\n\n";
@@ -41,13 +25,22 @@ void printHelp(const char* programName) {
     std::cout << "  --p2p-port=<port>   Set P2P port (default: 30303)\n";
     std::cout << "  --rpc-port=<port>   Set RPC port (default: 8545)\n";
     std::cout << "  --chain-id=<id>     Set chain ID (default: 1337)\n";
+    std::cout << "  --wallet            Launch wallet CLI\n";
+#ifdef GAMBIT_GUI_ENABLED
+    std::cout << "  --gui               Launch graphical user interface\n";
+#endif
     std::cout << "\nExamples:\n";
     std::cout << "  " << programName << " --mine-blocks=10 --enable-rpc\n";
     std::cout << "  " << programName << " --auto-mining --rpc-port=8080\n";
     std::cout << "  " << programName << " --no-p2p --mine-blocks=5\n";
+#ifdef GAMBIT_GUI_ENABLED
+    std::cout << "  " << programName << " --gui --enable-rpc\n";
+#endif
 }
 
-bool parseArgs(int argc, char* argv[], NodeConfig& config) {
+bool parseArgs(int argc, char* argv[], NodeConfig& config, bool& enableWallet) {
+    enableWallet = false;
+    
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         
@@ -63,6 +56,14 @@ bool parseArgs(int argc, char* argv[], NodeConfig& config) {
         }
         else if (arg == "--auto-mining") {
             config.enableMining = true;
+        }
+        else if (arg == "--gui") {
+#ifdef GAMBIT_GUI_ENABLED
+            config.enableGUI = true;
+#else
+            std::cerr << "Error: GUI support not compiled. Rebuild with GAMBIT_BUILD_GUI=ON\n";
+            return false;
+#endif
         }
         else if (arg.rfind("--mine-blocks=", 0) == 0) {
             std::string numStr = arg.substr(14);
@@ -114,9 +115,9 @@ bool parseArgs(int argc, char* argv[], NodeConfig& config) {
                 std::cerr << "Error: Invalid chain ID: " << idStr << "\n";
                 return false;
             }
-        }// In parseArgs function, add:
+        }
         else if (arg == "--wallet") {
-            config.enableWallet = true;
+            enableWallet = true;
         }
         else {
             std::cerr << "Error: Unknown option: " << arg << "\n";
@@ -146,7 +147,7 @@ void walletCLI() {
         auto w = Wallet::create(path, password);
         w->addAccount("default", "m/44'/60'/0'/0/0");
         w->save(password);
-        std::cout << "✓ Wallet created and saved\n";
+        std::cout << "Wallet created and saved\n";
     }
     else if (command == "load") {
         std::string path, password;
@@ -171,147 +172,59 @@ void walletCLI() {
     }
 }
 
-
-int main(int argc, char* argv[]) {
-    // Parse command line arguments
-    NodeConfig config;
-    if (!parseArgs(argc, argv, config)) {
-        return 1;
-    }
-    if (config.enableWallet) {
-        walletCLI();
-        return 0;
-    }
-    std::cout << "=== Gambit Node Starting ===\n";
-    
-    // ========================================
-    // Genesis Configuration
-    // ========================================
-    // Using deterministic dev keypairs for reproducible testing.
-    // In production, these would be loaded from a config file or generated once.
-    
-    // Dev keypair - deterministic seed for testing
-    // Private key: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-    // (This is a well-known Hardhat/Foundry dev key - DO NOT use in production!)
-    Bytes32 devPrivKey = {
-        0xac, 0x09, 0x74, 0xbe, 0xc3, 0x9a, 0x17, 0xe3,
-        0x6b, 0xa4, 0xa6, 0xb4, 0xd2, 0x38, 0xff, 0x94,
-        0x4b, 0xac, 0xb4, 0x78, 0xcb, 0xed, 0x5e, 0xfc,
-        0xae, 0x78, 0x4d, 0x7b, 0xf4, 0xf2, 0xff, 0x80
-    };
-    
-    KeyPair devKey = KeyPair::fromPrivateKey(devPrivKey);
-    Address coinbase = devKey.address();
-/*
-
-    VMRegistry vmRegistry;
-    initBuiltInVMs(vmRegistry);
-    
-    VMPluginLoader loader(vmRegistry);
-    loader.loadFromDirectory("plugins");
-    
-    // now Executor can use any VM type that exists in registry
-*/      
-
-    std::cout << "\n=== Genesis Configuration ===\n";
-    std::cout << "Chain ID:      " << config.chainId << "\n";
-    std::cout << "Coinbase:      " << coinbase.toHex() << "\n";
-    std::cout << "Premine:       " << config.premineAmount << "\n";
-
-    // Create genesis config
-    GenesisConfig genesis;
-    genesis.chainId = config.chainId;
-    genesis.premine.push_back({ coinbase, config.premineAmount });
-
-    // Initialize blockchain with genesis
-    Blockchain chain(genesis);
-    
-    const Block& genesisBlock = chain.chain().front();
-    std::cout << "Genesis Hash:  " << genesisBlock.hash << "\n";
-    std::cout << "State Root:    " << genesisBlock.stateAfter << "\n";
-    std::cout << "==============================\n\n";
-
-    // 4. P2P node (optional)
-    std::unique_ptr<P2PNode> node;
-    if (config.enableP2P) {
-        node = std::make_unique<P2PNode>(chain, config.p2pPort);
-        node->start();
-        std::cout << "P2P node listening on port " << config.p2pPort << "\n";
-    } else {
-        std::cout << "P2P networking disabled\n";
-    }
-
-    // 5. RPC server (optional)
-    std::unique_ptr<RpcServer> rpc;
-    if (config.enableRPC) {
-        rpc = std::make_unique<RpcServer>(chain, config.rpcPort);
-        rpc->start();
-        std::cout << "RPC ready on http://127.0.0.1:" << config.rpcPort << "\n";
-    } else {
-        std::cout << "RPC server disabled\n";
-    }
-
-    // 6. Start miner (optional, mine every 5 seconds)
-    std::unique_ptr<ZkMiningEngine> engine;
-    std::unique_ptr<Miner> miner;
-    if (config.enableMining) {
-        if (!node) {
-            std::cout << "Warning: Mining enabled but P2P disabled - blocks won't be broadcast\n";
-        }
-        engine = std::make_unique<ZkMiningEngine>();
-        // Note: Miner needs P2PNode reference - create dummy or handle nullptr
-        if (node) {
-            miner = std::make_unique<Miner>(chain, *node, *engine);
-            miner->setInterval(std::chrono::seconds(5));
-            miner->start();
-            std::cout << "Miner started (5 second interval)\n";
-        } else {
-            std::cout << "Mining skipped - requires P2P node\n";
-        }
-    }
-
-    // Mine N blocks if requested
-    if (config.mineBlocks > 0) {
-        std::cout << "Mining " << config.mineBlocks << " blocks...\n";
-        for (uint32_t i = 0; i < config.mineBlocks; ++i) {
-            Block block = chain.mineBlock();
-            std::cout << "Mined block #" << block.index 
-                      << " hash=" << block.hash
-                      << " proof=" << block.proof.proof
-                      << " (nonce=" << block.nonce << ")\n";
-            if (node) {
-                node->broadcastNewBlock(block);
-            }
-            // Pause between blocks (skip on last block)
-            if (i + 1 < config.mineBlocks) {
-                std::this_thread::sleep_for(std::chrono::seconds(5));
-            }
-        }
-        std::cout << "Finished mining " << config.mineBlocks << " blocks.\n";
-    }
-
-    // Print active configuration
+void runCLI(Node& node) {
     std::cout << "\n=== Node Status ===\n";
-    std::cout << "Chain ID:    " << config.chainId << "\n";
-    std::cout << "P2P:         " << (config.enableP2P ? "enabled (port " + std::to_string(config.p2pPort) + ")" : "disabled") << "\n";
-    std::cout << "RPC:         " << (config.enableRPC ? "enabled (port " + std::to_string(config.rpcPort) + ")" : "disabled") << "\n";
-    std::cout << "Auto-mining: " << (config.enableMining ? "enabled" : "disabled") << "\n";
-    std::cout << "Block height: " << chain.chain().size() - 1 << "\n";
-    if (config.mineBlocks > 0) {
-        std::cout << "Mine blocks: " << config.mineBlocks << " (completed)\n";
+    std::cout << "Chain ID:    " << node.config().chainId << "\n";
+    std::cout << "P2P:         " << (node.config().enableP2P ? "enabled (port " + std::to_string(node.config().p2pPort) + ")" : "disabled") << "\n";
+    std::cout << "RPC:         " << (node.config().enableRPC ? "enabled (port " + std::to_string(node.config().rpcPort) + ")" : "disabled") << "\n";
+    std::cout << "Auto-mining: " << (node.config().enableMining ? "enabled" : "disabled") << "\n";
+    std::cout << "Block height: " << node.blockHeight() << "\n";
+    if (node.config().mineBlocks > 0) {
+        std::cout << "Mine blocks: " << node.config().mineBlocks << " (completed)\n";
     }
     std::cout << "===================\n\n";
     std::cout << "Node running. Press Ctrl+C to stop.\n";
 
     // Keep node alive
-    while (true) {
+    while (node.isRunning()) {
         std::this_thread::sleep_for(std::chrono::seconds(5));
     }
+}
+
+int main(int argc, char* argv[]) {
+    // Parse command line arguments
+    NodeConfig config;
+    bool enableWallet = false;
     
-    // Cleanup (unreachable in current loop, but here for completeness)
-    if (miner) miner->stop();
-    if (rpc) rpc->stop();
-    if (node) node->stop();
+    if (!parseArgs(argc, argv, config, enableWallet)) {
+        return 1;
+    }
+    
+    // Wallet mode
+    if (enableWallet) {
+        walletCLI();
+        return 0;
+    }
+    
+    std::cout << "=== Gambit Node Starting ===\n";
+
+    // Create and start node
+    Node node(config);
+    node.start();
+
+#ifdef GAMBIT_GUI_ENABLED
+    if (config.enableGUI) {
+        // Run GUI mode - FLTK event loop takes over
+        runGUI(node);
+        return 0;
+    }
+#endif
+
+    // CLI mode - blocking loop
+    runCLI(node);
+    
+    // Cleanup
+    node.stop();
     return 0;
 }
 
